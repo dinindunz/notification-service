@@ -63,6 +63,9 @@ exports.handler = async (event) => {
       `),
     });
 
+    // Grant SNS publish permission to fix AuthorizationErrorException
+    notificationTopic.grantPublish(notificationLambda);
+
     // Add tags
     cdk.Tags.of(this).add('GitHubRepo', 'dinindunz/notification-service');
     cdk.Tags.of(this).add('Service', 'NotificationService');
