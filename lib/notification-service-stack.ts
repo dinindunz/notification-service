@@ -3,7 +3,6 @@ import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { LambdaDestination } from 'aws-cdk-lib/aws-logs-destinations';
 import * as sns from 'aws-cdk-lib/aws-sns';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
 
 export class NotificationServiceStack extends cdk.Stack {
@@ -63,6 +62,9 @@ exports.handler = async (event) => {
       `),
     });
 
+    // Grant SNS publish permission to the Lambda function
+    notificationTopic.grantPublish(notificationLambda);
+
     // Add tags
     cdk.Tags.of(this).add('GitHubRepo', 'dinindunz/notification-service');
     cdk.Tags.of(this).add('Service', 'NotificationService');
@@ -72,7 +74,7 @@ exports.handler = async (event) => {
     const cloudAgentLambda = lambda.Function.fromFunctionArn(
       this,
       'ImportedLambda',
-      'arn:aws:lambda:ap-southeast-2:722141136946:function:CloudEngineerStack-CloudEngineerFunction386E0CF3-5bN5YEoCEDsn'
+      'arn:aws:lambda:ap-southeast-2:354334841216:function:CloudEngineerStack-CloudEngineerFunction386E0CF3-5bN5YEoCEDsn'
     );
 
     new lambda.CfnPermission(this, 'AllowCWLogsInvokeLambda', {
