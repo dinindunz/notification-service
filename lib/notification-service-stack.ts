@@ -63,9 +63,6 @@ exports.handler = async (event) => {
       `),
     });
 
-    // Grant SNS publish permission to the Lambda function
-    notificationTopic.grantPublish(notificationLambda);
-
     // Add tags
     cdk.Tags.of(this).add('GitHubRepo', 'dinindunz/notification-service');
     cdk.Tags.of(this).add('Service', 'NotificationService');
@@ -102,11 +99,6 @@ exports.handler = async (event) => {
     new cdk.CfnOutput(this, 'CloudAgentArn', {
       value: cloudAgentLambda.functionArn,
       description: 'ARN of the cloud agent lambda'
-    });
-
-    new cdk.CfnOutput(this, 'SNSTopicArn', {
-      value: notificationTopic.topicArn,
-      description: 'ARN of the SNS notification topic'
     });
   }
 }
