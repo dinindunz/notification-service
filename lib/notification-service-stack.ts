@@ -72,7 +72,7 @@ exports.handler = async (event) => {
     const cloudAgentLambda = lambda.Function.fromFunctionArn(
       this,
       'ImportedLambda',
-      'arn:aws:lambda:ap-southeast-2:722141136946:function:CloudEngineerStack-CloudEngineerFunction386E0CF3-5bN5YEoCEDsn'
+      'arn:aws:lambda:ap-southeast-2:354334841216:function:CloudEngineerStack-CustomVpcRestrictDefaultSGCusto-H2LgJUIjnuek'
     );
 
     new lambda.CfnPermission(this, 'AllowCWLogsInvokeLambda', {
