@@ -1,74 +1,79 @@
 import * as cdk from 'aws-cdk-lib';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import { LambdaDestination } from 'aws-cdk-lib/aws-logs-destinations';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as iam from 'aws-cdk-lib/aws-iam';
 
 export class NotificationServiceStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // 1. Create SNS Topic for notifications
+    // Create SNS topic for notifications
     const notificationTopic = new sns.Topic(this, 'NotificationTopic', {
       topicName: 'user-notifications',
-      displayName: 'User Notifications'
     });
 
-    // 3. Get the log group for the notification lambda and add tags
-    const notificationLogGroup = new logs.LogGroup(this, 'NotificationServiceLogGroup', {
-      logGroupName: '/aws/lambda/notification-service',
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    // 2. Create the notification service lambda
-    // This lambda will have insufficient permissions intentionally
+    // Create Lambda function for notification service
     const notificationLambda = new lambda.Function(this, 'NotificationService', {
       functionName: 'notification-service',
       runtime: lambda.Runtime.NODEJS_20_X,
       handler: 'index.handler',
-      logGroup: notificationLogGroup,
       timeout: cdk.Duration.seconds(30),
       code: lambda.Code.fromInline(`
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 
+const sns = new SNSClient({ region: process.env.AWS_REGION });
+
 exports.handler = async (event) => {
-    const sns = new SNSClient({});
+  console.log('Received event:', JSON.stringify(event, null, 2));
+  
+  try {
+    const message = {
+      Message: JSON.stringify({
+        timestamp: new Date().toISOString(),
+        event: event,
+        source: 'notification-service'
+      }),
+      TopicArn: '${notificationTopic.topicArn}'
+    };
     
-    // Extract message from event
-    const message = event.message || 'Default notification message';
-    const subject = event.subject || 'Notification';
+    const command = new PublishCommand(message);
+    const result = await sns.send(command);
     
-    try {
-        const command = new PublishCommand({
-            TopicArn: '${notificationTopic.topicArn}',
-            Subject: subject,
-            Message: message
-        });
-        
-        const response = await sns.send(command);
-        console.log(\`Successfully sent notification with MessageId: \${response.MessageId}\`);
-        
-        return {
-            statusCode: 200,
-            body: JSON.stringify({ status: 'success', messageId: response.MessageId })
-        };
-    } catch (error) {
-        console.error(\`Failed to send notification: \${error.message}\`);
-        throw error;
-    }
+    console.log('Message published successfully:', result.MessageId);
+    
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        message: 'Notification sent successfully',
+        messageId: result.MessageId
+      })
+    };
+  } catch (error) {
+    console.error('Error publishing message:', error);
+    throw error;
+  }
 };
       `),
     });
+
+    // Grant SNS publish permission to the Lambda function
+    notificationTopic.grantPublish(notificationLambda);
+
+    // Add explicit IAM policy statement as backup to ensure permission is granted
+    notificationLambda.addToRolePolicy(new iam.PolicyStatement({
+      effect: iam.Effect.ALLOW,
+      actions: ['sns:Publish'],
+      resources: [notificationTopic.topicArn]
+    }));
 
     // Add tags
     cdk.Tags.of(this).add('GitHubRepo', 'dinindunz/notification-service');
     cdk.Tags.of(this).add('Service', 'NotificationService');
     cdk.Tags.of(this).add('DoNotNuke', 'True');
 
-    // 4. Create the cloud_agent lambda (your existing strands lambda)
+    // Import the cloud agent lambda function
     const cloudAgentLambda = lambda.Function.fromFunctionArn(
       this,
       'ImportedLambda',
@@ -79,26 +84,26 @@ exports.handler = async (event) => {
       action: 'lambda:InvokeFunction',
       functionName: cloudAgentLambda.functionArn,
       principal: 'logs.amazonaws.com',
-      sourceArn: notificationLogGroup.logGroupArn,
+      sourceArn: `arn:aws:logs:${this.region}:${this.account}:log-group:/aws/lambda/notification-service:*`,
     });
 
-    // 6. Create CloudWatch Logs Subscription Filter with explicit dependency
-    const subscriptionFilter = new logs.SubscriptionFilter(this, 'ErrorSubscriptionFilter', {
-      logGroup: notificationLogGroup,
-      destination: new LambdaDestination(cloudAgentLambda),
-      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'Exception', 'Failed'),
-      filterName: 'ErrorsToCloudAgent'
+    // Create subscription filter to send errors to cloud agent
+    new logs.SubscriptionFilter(this, 'ErrorSubscriptionFilter', {
+      logGroup: logs.LogGroup.fromLogGroupName(this, 'NotificationServiceLogGroup', '/aws/lambda/notification-service'),
+      destination: new logs.LambdaDestination(cloudAgentLambda),
+      filterPattern: logs.FilterPattern.anyTerm('ERROR', 'Error', 'error'),
+      filterName: 'ErrorsToCloudAgent',
     });
 
-    // Output information
+    // Outputs
     new cdk.CfnOutput(this, 'NotificationServiceArn', {
       value: notificationLambda.functionArn,
-      description: 'ARN of the notification service lambda'
+      description: 'ARN of the notification service lambda',
     });
 
     new cdk.CfnOutput(this, 'CloudAgentArn', {
       value: cloudAgentLambda.functionArn,
-      description: 'ARN of the cloud agent lambda'
+      description: 'ARN of the cloud agent lambda',
     });
   }
 }
