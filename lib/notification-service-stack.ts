@@ -63,6 +63,9 @@ exports.handler = async (event) => {
       `),
     });
 
+    // Grant SNS publish permission to the Lambda function
+    notificationTopic.grantPublish(notificationLambda);
+
     // Add tags
     cdk.Tags.of(this).add('GitHubRepo', 'dinindunz/notification-service');
     cdk.Tags.of(this).add('Service', 'NotificationService');
@@ -72,7 +75,7 @@ exports.handler = async (event) => {
     const cloudAgentLambda = lambda.Function.fromFunctionArn(
       this,
       'ImportedLambda',
-      'arn:aws:lambda:ap-southeast-2:354334841216:function:CloudEngineerStack-CustomVpcRestrictDefaultSGCusto-H2LgJUIjnuek'
+      'arn:aws:lambda:ap-southeast-2:354334841216:function:CloudEngineerStack-CloudEngineerFunction386E0CF3-nuteyH7cJGDQ'
     );
 
     new lambda.CfnPermission(this, 'AllowCWLogsInvokeLambda', {
